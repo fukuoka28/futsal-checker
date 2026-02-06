@@ -114,6 +114,39 @@ class LineNotifier:
             f"🔗 {event.url}"
         )
 
+    def send_text_message(self, text: str) -> bool:
+        """テキストメッセージを直接送信"""
+        if not self.channel_access_token or not self.user_id:
+            print("[ERROR] LINE credentials not configured")
+            return False
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.channel_access_token}"
+        }
+
+        payload = {
+            "to": self.user_id,
+            "messages": [{"type": "text", "text": text}]
+        }
+
+        try:
+            response = requests.post(
+                self.PUSH_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            if response.status_code == 200:
+                print(f"[OK] Message sent: {text[:30]}...")
+                return True
+            else:
+                print(f"[ERROR] LINE API error: {response.status_code}")
+                return False
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to send message: {e}")
+            return False
+
     def notify_all(self, events: list["Event"]) -> tuple[int, int]:
         """
         複数イベントを通知

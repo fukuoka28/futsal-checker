@@ -28,8 +28,12 @@ def main():
     print("\n[STEP 1] Scraping events...")
     events = list(scraper.scrape_all())
 
+    # 通知処理の準備
+    notifier = LineNotifier(sent_urls_file="data/sent_urls.txt")
+
     if not events:
         print("[INFO] No matching events found")
+        notifier.send_text_message("【定期報告】条件に合う新着募集はありませんでした。")
         print("=" * 60)
         return 0
 
@@ -37,13 +41,13 @@ def main():
 
     # 通知処理
     print("\n[STEP 2] Sending notifications...")
-    notifier = LineNotifier(sent_urls_file="data/sent_urls.txt")
 
     # 新着イベントをフィルタリング
     new_events = notifier.filter_new_events(events)
 
     if not new_events:
         print("[INFO] No new events to notify (all already sent)")
+        notifier.send_text_message("【定期報告】条件に合う新着募集はありませんでした。")
         print("=" * 60)
         return 0
 
