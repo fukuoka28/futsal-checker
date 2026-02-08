@@ -28,13 +28,11 @@ class LaBOLAScraper:
     BASE_URL = "https://labola.jp"
     SEARCH_URL_TEMPLATE = (
         "https://labola.jp/reserve/events/search/personal/"
-        "area-13/day-{date}/keyword-代々木/"
+        "area-13/day-{date}/"
     )
 
     # フィルタリング条件
-    REQUIRED_KEYWORD = "代々木"
-    REQUIRED_KEYWORD = "大会"
-    EXCLUDED_KEYWORD = "千住大橋"
+    ACCEPTING_STATUS = "受付け中"
 
     def __init__(self, dates_file: str = "data/dates.txt"):
         self.dates_file = dates_file
@@ -105,15 +103,12 @@ class LaBOLAScraper:
             if not title:
                 continue
 
+            # ステータスが「受付け中」かどうかをチェック
+            if not self._is_accepting(link):
+                continue
+
             # 施設名を推定（親要素から探す）
             facility = self._extract_facility(link)
-
-            # 検索用のテキスト（タイトル + 施設名）
-            search_text = f"{title} {facility}"
-
-            # フィルタリング
-            if not self._is_valid_event(search_text):
-                continue
 
             events.append(Event(
                 title=title,
@@ -134,28 +129,32 @@ class LaBOLAScraper:
 
             text = parent.get_text(separator=" ", strip=True)
 
-            # 「代々木」を含むテキストを施設名として扱う
-            if self.REQUIRED_KEYWORD in text:
-                # タイトルから施設名を推測
-                match = re.search(r"【(.+?)】", text)
-                if match:
-                    return match.group(1)
+            # 【施設名】の形式を探す
+            match = re.search(r"【(.+?)】", text)
+            if match:
+                return match.group(1)
 
             parent = parent.parent
 
         return ""
 
-    def _is_valid_event(self, text: str) -> bool:
-        """フィルタリング条件をチェック"""
-        # 必須: 「代々木」が含まれること
-        if self.REQUIRED_KEYWORD not in text:
-            return False
+    def _is_accepting(self, link_element) -> bool:
+        """ステータスが「受付け中」かどうかをチェック"""
+        # 親要素を遡ってステータスを探す
+        parent = link_element.parent
+        for _ in range(5):
+            if parent is None:
+                break
 
-        # 除外: 「千住大橋」が含まれる場合は除外
-        if self.EXCLUDED_KEYWORD in text:
-            return False
+            text = parent.get_text(separator=" ", strip=True)
 
-        return True
+            # 「受付け中」が含まれていれば有効
+            if self.ACCEPTING_STATUS in text:
+                return True
+
+            parent = parent.parent
+
+        return False
 
     def scrape_all(self) -> Generator[Event, None, None]:
         """全日付を巡回してイベントを取得"""
