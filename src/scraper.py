@@ -32,7 +32,6 @@ class LaBOLAScraper:
     )
 
     # フィルタリング条件
-    ACCEPTING_STATUS = "受付け中"
     REQUIRED_KEYWORD = "大会"
     EXCLUDED_KEYWORD = "千住大橋"
 
@@ -150,11 +149,8 @@ class LaBOLAScraper:
 
             text = parent.get_text(separator=" ", strip=True)
 
-            # 必須条件: 「受付け中」と「大会」の両方が含まれていること
-            has_accepting = self.ACCEPTING_STATUS in text
-            has_tournament = self.REQUIRED_KEYWORD in text
-
-            if has_accepting and has_tournament:
+            # 必須条件: 「大会」が含まれていること
+            if self.REQUIRED_KEYWORD in text:
                 # 除外条件: 「千住大橋」が含まれていたら除外
                 if self.EXCLUDED_KEYWORD in text:
                     return False
