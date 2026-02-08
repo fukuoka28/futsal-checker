@@ -33,7 +33,6 @@ def main():
 
     if not events:
         print("[INFO] No matching events found")
-        notifier.send_text_message("【定期報告】条件に合う新着募集はありませんでした。")
         print("=" * 60)
         return 0
 
@@ -47,7 +46,6 @@ def main():
 
     if not new_events:
         print("[INFO] No new events to notify (all already sent)")
-        notifier.send_text_message("【定期報告】条件に合う新着募集はありませんでした。")
         print("=" * 60)
         return 0
 
