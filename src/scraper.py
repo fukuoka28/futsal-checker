@@ -28,7 +28,7 @@ class LaBOLAScraper:
     BASE_URL = "https://labola.jp"
     SEARCH_URL_TEMPLATE = (
         "https://labola.jp/reserve/events/search/personal/"
-        "area-13/day-{date}/"
+        "area-13/day-{date}/keyword-大会"
     )
 
     # フィルタリング条件
