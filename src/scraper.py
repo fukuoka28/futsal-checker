@@ -33,6 +33,8 @@ class LaBOLAScraper:
 
     # フィルタリング条件
     ACCEPTING_STATUS = "受付け中"
+    REQUIRED_KEYWORD = "大会"
+    EXCLUDED_KEYWORD = "千住大橋"
 
     def __init__(self, dates_file: str = "data/dates.txt"):
         self.dates_file = dates_file
@@ -103,8 +105,8 @@ class LaBOLAScraper:
             if not title:
                 continue
 
-            # ステータスが「受付け中」かどうかをチェック
-            if not self._is_accepting(link):
+            # フィルタリング条件をチェック
+            if not self._is_valid_event(link):
                 continue
 
             # 施設名を推定（親要素から探す）
@@ -138,9 +140,9 @@ class LaBOLAScraper:
 
         return ""
 
-    def _is_accepting(self, link_element) -> bool:
-        """ステータスが「受付け中」かどうかをチェック"""
-        # 親要素を遡ってステータスを探す
+    def _is_valid_event(self, link_element) -> bool:
+        """イベントが条件を満たすかチェック"""
+        # 親要素を遡ってテキストを収集
         parent = link_element.parent
         for _ in range(5):
             if parent is None:
@@ -148,8 +150,14 @@ class LaBOLAScraper:
 
             text = parent.get_text(separator=" ", strip=True)
 
-            # 「受付け中」が含まれていれば有効
-            if self.ACCEPTING_STATUS in text:
+            # 必須条件: 「受付け中」と「大会」の両方が含まれていること
+            has_accepting = self.ACCEPTING_STATUS in text
+            has_tournament = self.REQUIRED_KEYWORD in text
+
+            if has_accepting and has_tournament:
+                # 除外条件: 「千住大橋」が含まれていたら除外
+                if self.EXCLUDED_KEYWORD in text:
+                    return False
                 return True
 
             parent = parent.parent
