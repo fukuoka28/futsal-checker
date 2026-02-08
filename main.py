@@ -57,7 +57,7 @@ def main():
         print(f"  [{event.date}] {event.title[:50]}...")
 
     # LINE通知を送信
-    success, failed = notifier.notify_all(events)
+    success, failed = notifier.notify_all(new_events)
 
     print("\n" + "=" * 60)
     print(f"Summary: {success} notifications sent, {failed} failed")
