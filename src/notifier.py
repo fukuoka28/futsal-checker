@@ -104,10 +104,17 @@ class LineNotifier:
         """通知メッセージをフォーマット"""
         date_formatted = f"{event.date[:4]}/{event.date[4:6]}/{event.date[6:]}"
 
+        # 曜日と時間を追加
+        date_line = f"📅 {date_formatted}"
+        if event.day_of_week:
+            date_line += f"（{event.day_of_week}）"
+        if event.time:
+            date_line += f" {event.time}"
+
         return (
             f"🏃 フットサル募集【新着】\n"
             f"\n"
-            f"📅 {date_formatted}\n"
+            f"{date_line}\n"
             f"📍 {event.facility or '代々木'}\n"
             f"📝 {event.title}\n"
             f"\n"

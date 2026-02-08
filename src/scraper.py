@@ -20,6 +20,8 @@ class Event:
     facility: str
     url: str
     date: str
+    day_of_week: str = ""  # 曜日（土, 日, etc.）
+    time: str = ""  # 開催時間（8:00, 10:30, etc.）
 
 
 class LaBOLAScraper:
@@ -34,6 +36,17 @@ class LaBOLAScraper:
     # フィルタリング条件
     REQUIRED_KEYWORDS = ["受付け中", "大会"]  # AND条件：すべて含む必要あり
     EXCLUDED_KEYWORD = "千住大橋"
+
+    # 曜日変換マップ（英語→日本語）
+    DAY_OF_WEEK_MAP = {
+        "mon": "月",
+        "tue": "火",
+        "wed": "水",
+        "thu": "木",
+        "fri": "金",
+        "sat": "土",
+        "sun": "日",
+    }
 
     def __init__(self, dates_file: str = "data/dates.txt"):
         self.dates_file = dates_file
@@ -113,6 +126,17 @@ class LaBOLAScraper:
             status_elem = card.find("p", class_=lambda x: x and "c-eventcard__state" in x)
             status = status_elem.get_text(strip=True) if status_elem else ""
 
+            # 曜日を取得（sat, sun → 土, 日）
+            day_of_week = ""
+            week_elem = card.find("p", class_=lambda x: x and "c-eventcard__date__week" in x)
+            if week_elem:
+                week_text = week_elem.get_text(strip=True).lower()
+                day_of_week = self.DAY_OF_WEEK_MAP.get(week_text, week_text)
+
+            # 開催時間を取得
+            time_elem = card.find("p", class_="c-eventcard__date__time")
+            event_time = time_elem.get_text(strip=True) if time_elem else ""
+
             # 施設名を取得（主催者行から）
             facility = self._extract_facility_from_card(card)
 
@@ -120,6 +144,8 @@ class LaBOLAScraper:
             print(f"\n[枠 {idx}] テキスト情報:")
             print(f"  タイトル: {title}")
             print(f"  ステータス: {status}")
+            print(f"  曜日: {day_of_week}")
+            print(f"  時間: {event_time}")
             print(f"  施設: {facility}")
             print(f"  URL: {full_url}")
 
@@ -139,7 +165,9 @@ class LaBOLAScraper:
                 title=title,
                 facility=facility,
                 url=full_url,
-                date=date
+                date=date,
+                day_of_week=day_of_week,
+                time=event_time
             ))
 
         print("-" * 60)
