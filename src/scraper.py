@@ -32,7 +32,7 @@ class LaBOLAScraper:
     )
 
     # フィルタリング条件
-    REQUIRED_KEYWORD = "大会"
+    REQUIRED_KEYWORDS = ["受付け中", "大会"]  # AND条件：すべて含む必要あり
     EXCLUDED_KEYWORD = "千住大橋"
 
     def __init__(self, dates_file: str = "data/dates.txt"):
@@ -81,35 +81,59 @@ class LaBOLAScraper:
             return None
 
     def parse_events(self, soup: BeautifulSoup, date: str) -> list[Event]:
-        """ページから募集イベントを抽出"""
+        """ページから募集イベントを抽出（イベントカード単位でループ）"""
         events = []
 
-        # イベントリンクを探す（/event/show/ を含むリンク）
-        event_links = soup.find_all("a", href=lambda x: x and "/event/show/" in x)
+        # イベントカード（募集枠）を探す
+        event_cards = soup.find_all("div", class_="c-eventcard")
 
-        seen_urls = set()
-        for link in event_links:
-            href = link.get("href", "")
+        print(f"\n[DEBUG] Found {len(event_cards)} event cards on page")
+        print("-" * 60)
 
-            # 重複除去
-            if href in seen_urls:
+        for idx, card in enumerate(event_cards, 1):
+            # カード全体のテキストを取得
+            card_text = card.get_text(separator=" ", strip=True)
+
+            # タイトルとURLを取得
+            title_elem = card.find("p", class_="c-eventcard__title")
+            if not title_elem:
+                print(f"\n[枠 {idx}] タイトル要素が見つかりません → スキップ")
                 continue
-            seen_urls.add(href)
 
-            # 完全なURLを構築
+            link = title_elem.find("a")
+            if not link:
+                print(f"\n[枠 {idx}] リンクが見つかりません → スキップ")
+                continue
+
+            href = link.get("href", "")
+            title = link.get_text(strip=True)
             full_url = href if href.startswith("http") else f"{self.BASE_URL}{href}"
 
-            # タイトルを取得
-            title = link.get_text(strip=True)
+            # ステータスを取得（受付け中、満席、空いたら通知、開催中止など）
+            status_elem = card.find("p", class_=lambda x: x and "c-eventcard__state" in x)
+            status = status_elem.get_text(strip=True) if status_elem else ""
+
+            # 施設名を取得（主催者行から）
+            facility = self._extract_facility_from_card(card)
+
+            # デバッグ出力
+            print(f"\n[枠 {idx}] テキスト情報:")
+            print(f"  タイトル: {title}")
+            print(f"  ステータス: {status}")
+            print(f"  施設: {facility}")
+            print(f"  URL: {full_url}")
+
             if not title:
+                print(f"  → [除外] タイトルが空のためスキップ")
                 continue
 
-            # フィルタリング条件をチェック
-            if not self._is_valid_event(link):
+            # フィルタリング条件をチェック（カード単位のテキストで判定）
+            is_valid, reason = self._is_valid_card(card_text, title, status)
+            if not is_valid:
+                print(f"  → [除外] {reason}")
                 continue
 
-            # 施設名を推定（親要素から探す）
-            facility = self._extract_facility(link)
+            print(f"  → [通過] フィルター条件を満たしました")
 
             events.append(Event(
                 title=title,
@@ -118,47 +142,47 @@ class LaBOLAScraper:
                 date=date
             ))
 
+        print("-" * 60)
         return events
 
-    def _extract_facility(self, link_element) -> str:
-        """リンク要素から施設名を抽出"""
-        # 親要素を遡って施設情報を探す
-        parent = link_element.parent
-        for _ in range(5):
-            if parent is None:
-                break
+    def _extract_facility_from_card(self, card) -> str:
+        """イベントカードから施設名を抽出"""
+        # 主催者の行を探す
+        text_elems = card.find_all("p", class_="c-eventcard__text")
+        for elem in text_elems:
+            text = elem.get_text(strip=True)
+            if text.startswith("主催者："):
+                # 主催者リンクからテキストを取得
+                link = elem.find("a")
+                if link:
+                    return link.get_text(strip=True)
+                # リンクがなければ「主催者：」の後のテキスト
+                return text.replace("主催者：", "")
 
-            text = parent.get_text(separator=" ", strip=True)
-
-            # 【施設名】の形式を探す
-            match = re.search(r"【(.+?)】", text)
-            if match:
-                return match.group(1)
-
-            parent = parent.parent
+        # 【施設名】の形式も試す
+        card_text = card.get_text(separator=" ", strip=True)
+        match = re.search(r"【(.+?)】", card_text)
+        if match:
+            return match.group(1)
 
         return ""
 
-    def _is_valid_event(self, link_element) -> bool:
-        """イベントが条件を満たすかチェック"""
-        # 親要素を遡ってテキストを収集
-        parent = link_element.parent
-        for _ in range(5):
-            if parent is None:
-                break
+    def _is_valid_card(self, card_text: str, title: str, status: str) -> tuple[bool, str]:
+        """イベントカードが条件を満たすかチェック"""
+        # 除外条件を最初にチェック: 「千住大橋」が含まれていたら除外
+        if self.EXCLUDED_KEYWORD in card_text:
+            return False, f"除外キーワード「{self.EXCLUDED_KEYWORD}」が含まれています"
 
-            text = parent.get_text(separator=" ", strip=True)
+        # 必須条件をチェック
+        # 「受付け中」はステータスで判定
+        if "受付け中" in self.REQUIRED_KEYWORDS and status != "受付け中":
+            return False, f"ステータスが「受付け中」ではありません（現在: {status or '不明'}）"
 
-            # 必須条件: 「大会」が含まれていること
-            if self.REQUIRED_KEYWORD in text:
-                # 除外条件: 「千住大橋」が含まれていたら除外
-                if self.EXCLUDED_KEYWORD in text:
-                    return False
-                return True
+        # 「大会」はタイトルまたはカード全体のテキストで判定
+        if "大会" in self.REQUIRED_KEYWORDS and "大会" not in card_text:
+            return False, "必須キーワード「大会」が見つかりません"
 
-            parent = parent.parent
-
-        return False
+        return True, "OK"
 
     def scrape_all(self) -> Generator[Event, None, None]:
         """全日付を巡回してイベントを取得"""
